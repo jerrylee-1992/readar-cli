@@ -8,7 +8,9 @@ Requires Node.js 22 or newer. The CLI talks only to the Readar HTTP API. It has 
 
 Tell your agent:
 
-> 请按照 https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/docs/agent-install.md 安装 Readar CLI，验证版本和帮助，并告诉我后续调用命令。
+> 请读取 https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md ，按说明安装并使用 Readar CLI。
+
+The [Readar Skill](skills/readar/SKILL.md) covers installation, email login, collection, questions and notes, pagination and error handling. It is self-contained and included in the compiled package. Agents can read it directly; agents with native Skill support can install the `skills/readar` folder using their supported skill installer. Reading the URL alone does not register a skill for future automatic discovery.
 
 With Node.js 22+, npm and Git installed, install into npm's execution cache and run directly from this public repository with one command:
 

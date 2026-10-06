@@ -2,7 +2,9 @@
 
 A user can ask an agent:
 
-> 请按照 https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/docs/agent-install.md 安装 Readar CLI，验证版本和帮助，并告诉我后续调用命令。
+> 请读取 https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md ，按说明安装并使用 Readar CLI。
+
+The [Readar Skill](https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md) is the entrypoint for install-and-use requests. This guide supplies detailed installation alternatives; native Skill registration uses the agent's supported installer.
 
 ## Install from GitHub
 

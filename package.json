@@ -4,7 +4,7 @@
   "description": "Agent-friendly CLI for Readar collection, questions and notes",
   "type": "module",
   "bin": {"readar": "dist/main.js"},
-  "files": ["dist", "README.md", "docs/agent-install.md"],
+  "files": ["dist", "README.md", "docs/agent-install.md", "skills/readar"],
   "engines": {"node": ">=22"},
   "scripts": {
     "build": "tsc && node scripts/executable.mjs",
