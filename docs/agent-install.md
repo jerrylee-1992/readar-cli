@@ -2,7 +2,7 @@
 
 A user can ask an agent:
 
-> 请读取 https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md ，按说明安装并使用 Readar CLI。
+> 请读取 https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md ，安装 CLI 并引导我登录 Readar。
 
 The [Readar Skill](https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md) is the entrypoint for install-and-use requests. This guide supplies detailed installation alternatives; native Skill registration uses the agent's supported installer.
 
@@ -19,6 +19,7 @@ The official public repository is https://github.com/jerrylee-1992/readar-cli. T
    ```
 
 3. Report the version and the exact `npx ... readar` prefix for subsequent commands. Cached execution does not add a bare `readar` command to the shell's PATH. Do not report success just because npm exits successfully.
+4. Continue with the login steps below: check the account status, then guide email verification if login is needed. Use the same command prefix for every step.
 
 ### Permanent executable from source
 
@@ -38,7 +39,7 @@ Install the tarball rather than using `npm install -g <git-url>`: some npm versi
 
 Keep npm lifecycle scripts enabled for this Git package; `--ignore-scripts` prevents compilation. If the environment blocks lifecycle scripts, report that constraint instead of bypassing its policy.
 
-Network failures should be reported without repeatedly reinstalling. Installing does not send email or create a login session. Ask for login details only when the user also wants to sign in.
+Network failures should be reported without repeatedly reinstalling. Installation itself does not send email or create a login session. After installation, guide the user to sign in; send a verification email only after they supply their account email for login. If they decline, leave the login command without sending email.
 
 ## After registry publication
 
@@ -46,11 +47,11 @@ The maintainer must update this guide with the verified package name and release
 
 ## Login
 
-1. Obtain the user's Readar API URL and account email. Do not infer which deployment contains the user's data.
-2. Run `readar auth status --api-url <url>`. Exit 3 means login is needed.
-3. Run `readar auth login --api-url <url> --email <email>` noninteractively. This sends an email and returns a challenge. Never repeat sending in a loop.
-4. Ask the user to enter the received code locally with `readar auth verify --api-url <url> --code <code>`, or pass the code to the CLI if the user explicitly supplies it. Codes expire; exit 2 means verification failed. Apple-only users need to bind their email in the App first.
-5. Verify with `readar auth status`. Never read, display or copy the session credential files into agent context.
+1. Use the default API `https://readar-api.starmind.tech` without asking for an address. The CLI preserves overrides: `--api-url`, `READAR_API_URL`, then saved URL, before the default. If the user requests another deployment, keep `--api-url <url>` on every login and usage command.
+2. Run `readar auth status`. If authenticated, report the account and finish. Exit 3 means login is needed; other errors must be reported rather than treated as logged out.
+3. Ask for the user's Readar account email, then run `readar auth login --email <email>` with closed/piped stdin and no TTY. This sends an email and returns a JSON challenge. Never repeat sending in a loop.
+4. Ask the user to enter the received code locally with `readar auth verify --code <code>`, or pass the code to the CLI if the user explicitly supplies it. Use the same `npx ... readar` prefix if no bare executable exists. Codes expire; exit 2 means verification failed. Apple-only users need to bind their email in the App first.
+5. Verify with `readar auth status` and report successful login only when it confirms the account. Never read, display or copy the session credential files into agent context.
 
 ## Usage
 

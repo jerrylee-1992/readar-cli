@@ -20,19 +20,19 @@ This builds into npm's execution cache. For every `readar` example below, use th
 
 For permanent installation or missing dependencies, consult the [installation guide](https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/docs/agent-install.md). Do not bypass an environment's script policy or request sudo for this CLI.
 
-## Account
+## Guide login after installation
 
-Use the user's configured API URL or obtain it from them; do not guess which deployment holds their data. Check `readar auth status` first, using `--api-url <url>` when needed. If login is required and the task needs account access, obtain the account email and run:
+After installation verification, continue to login guidance instead of ending at `--help`. The default API is `https://readar-api.starmind.tech`; do not ask the user for an API URL unless they request another deployment. Preserve an explicitly supplied API URL, `READAR_API_URL`, or a previously saved URL; the CLI resolves them in that order before the default. Check `readar auth status` first. If already authenticated, report the account and finish onboarding without sending another email. Report other status errors rather than treating them as logged out. If login is required (exit 3), explain email verification and ask for the user's Readar account email. Once they supply it for login, run:
 
 ```sh
-readar auth login --api-url <url> --email <email>
-readar auth verify --api-url <url> --code <six-digit-code>
-readar auth status --api-url <url>
+readar auth login --email <email>
+readar auth verify --code <six-digit-code>
+readar auth status
 ```
 
-Run login in a subprocess with closed/piped stdin and no TTY to receive a JSON challenge instead of prompting. Request the email code once; let the user enter it locally or use a code they explicitly supply. Never read or display session files or tokens. Apple-only users must bind an email in the App first. Installing alone does not authorize sending a login email, saving content or logging out.
+Run login in a subprocess with closed/piped stdin and no TTY to receive a JSON challenge instead of prompting. Request the email code once; let the user enter it locally using the same command prefix or use a code they explicitly supply. Verify `auth status` after code verification and report successful login only when it confirms the account. Never read or display session files or tokens. Apple-only users must bind an email in the App first. Do not send login email before the user supplies their email for login. If they decline login, report installation complete and leave the login command. Installation and login do not authorize saving content or logging out.
 
-Pass `--api-url <url>` throughout the task to keep the deployment explicit. Successful login also remembers it for later commands. Credentials for different API origins are separate.
+For a user-specified deployment, pass `--api-url <url>` throughout login, verification and subsequent commands to keep the deployment consistent. Login remembers the selected URL when a code is sent and after verification. Credentials for different API origins are separate.
 
 ## Save and query
 

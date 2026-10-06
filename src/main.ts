@@ -25,7 +25,10 @@ Usage:
 
 Global: --api-url <url>, --help, --version
 Environment: READAR_API_URL, READAR_CONFIG_DIR
-API URL is required on first use. A successful login remembers it.
+Default API: https://readar-api.starmind.tech
+API precedence: --api-url, READAR_API_URL, saved URL, default API.
+After installation, run readar auth login to sign in with email verification.
+A successful login remembers the API URL.
 JSON results go to stdout. JSON errors and interactive prompts go to stderr.
 Dates use UTC; --since is inclusive, --until is exclusive.
 Noninteractive auth login sends a code; auth verify completes login.
@@ -70,8 +73,7 @@ async function main(): Promise<void> {
   if (v.code !== undefined && !/^\d{6}$/.test(v.code)) invalid('--code must have six digits.');
   if (command === 'auth' && action === 'verify' && !v.code) invalid('Provide --code <six-digit-code>.');
   if (command === 'auth' && action === 'login' && !v.email && !stdin.isTTY) invalid('Provide --email for noninteractive login.');
-  const rawURL = v['api-url'] || process.env.READAR_API_URL || await savedURL();
-  if (!rawURL) invalid('Set READAR_API_URL or provide --api-url on first login.');
+  const rawURL = v['api-url'] || process.env.READAR_API_URL || await savedURL() || 'https://readar-api.starmind.tech';
   const apiURL = normalizeURL(rawURL); const client = new Client(apiURL);
   let result: unknown;
   if (command === 'auth') {

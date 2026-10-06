@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 
 let server, url, dir, requests, refreshes, expire, denyRefresh, mode;
 const user = { id: 'user-1', identities: [{ provider: 'email', display: 'test@example.com' }] };
@@ -89,6 +90,29 @@ async function login() {
 }
 
 test('help works without configuring an API', async () => { const r = await run(['--help'], '', { READAR_API_URL: '' }); assert.equal(r.code, 0); assert.match(r.out, /collect/); });
+test('fresh installation defaults to the official API without sending requests', async () => {
+  const r = await run(['auth', 'logout', '--local'], '', { READAR_API_URL: '' });
+  assert.equal(r.code, 0, r.err);
+  const hash = createHash('sha256').update('https://readar-api.starmind.tech').digest('hex').slice(0, 24);
+  assert.ok((await readdir(dir)).includes(`session-${hash}.json`));
+  assert.equal(requests.length, 0);
+  const status = await run(['auth', 'status'], '', { READAR_API_URL: '' });
+  assert.equal(status.code, 3, status.err);
+  assert.equal(JSON.parse(status.err).error.code, 'login_required');
+});
+test('explicit API flag overrides environment and saved API', async () => {
+  await writeFile(join(dir, 'config.json'), JSON.stringify({ api_url: url + '/saved' }));
+  const sent = await run(['auth', 'login', '--api-url', url, '--email', 'test@example.com'], '', { READAR_API_URL: url + '/env' });
+  assert.equal(sent.code, 0, sent.err);
+  assert.equal(requests[0].path, '/v1/auth/email/codes');
+  assert.equal(JSON.parse(await readFile(join(dir, 'config.json'), 'utf8')).api_url, url);
+});
+test('environment API overrides saved API and the default', async () => {
+  await login();
+  const r = await run(['auth', 'status'], '', { READAR_API_URL: url + '/other' });
+  assert.equal(r.code, 3, r.err);
+  assert.equal(JSON.parse(r.err).error.code, 'login_required');
+});
 test('noninteractive login requires an email instead of hanging', async () => { const r = await run(['auth', 'login']); assert.equal(r.code, 2); assert.equal(JSON.parse(r.err).error.code, 'invalid_input'); });
 test('login persists restricted credentials and status omits tokens', async () => {
   await login(); const r = await run(['auth', 'status']); assert.equal(r.code, 0); assert.equal(JSON.parse(r.out).user.id, 'user-1'); assert.ok(!r.out.includes('ra_'));
