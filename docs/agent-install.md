@@ -1,14 +1,44 @@
 # Install and use Readar CLI as an agent
 
-A user can ask an agent: “Read this installation guide, install Readar CLI, and help me sign in.” Host this file at a stable public URL after choosing the repository and publishing location.
+A user can ask an agent:
 
-## Before registry publication
+> 请读取 https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md ，按说明安装并使用 Readar CLI。
 
-This is an unpublished local project. Do not assume `readar-cli` on npm is this project. Obtain the trusted repository URL or local checkout path from the user.
+The [Readar Skill](https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md) is the entrypoint for install-and-use requests. This guide supplies detailed installation alternatives; native Skill registration uses the agent's supported installer.
 
-1. Check `node --version`: Node.js 22+ is required. Check `npm --version`. If missing, use the user's established Node installation method or the official Node.js installer for their OS.
-2. From the trusted checkout, run `npm ci`, `npm run build`, then `npm install -g .`. If global installation is unavailable, run `node <checkout>/dist/main.js` instead.
-3. Verify with `readar --version` and `readar --help`.
+## Install from GitHub
+
+The official public repository is https://github.com/jerrylee-1992/readar-cli. This project is not published to npm; do not install a similarly named registry package. Use the installation-enabled `codex/agent-install` ref below, or an explicitly supplied reviewed commit SHA.
+
+1. Check `node --version`, `npm --version` and `git --version`: Node.js 22+ is required. If missing, use the user's established installation method or the official installer for their OS. One sentence to the agent starts the whole workflow; it does not remove these runtime requirements.
+2. Install from the public Git URL into npm's execution cache and verify both commands below. npm installs build dependencies and runs `prepare` to compile the executable. No manual cloning, building, global write permission or GitHub login is required:
+
+   ```sh
+   npx -y --package='git+https://github.com/jerrylee-1992/readar-cli.git#codex/agent-install' readar --version
+   npx -y --package='git+https://github.com/jerrylee-1992/readar-cli.git#codex/agent-install' readar --help
+   ```
+
+3. Report the version and the exact `npx ... readar` prefix for subsequent commands. Cached execution does not add a bare `readar` command to the shell's PATH. Do not report success just because npm exits successfully.
+
+### Permanent executable from source
+
+If the user requests a permanent bare `readar` command, clone the installation-enabled branch into an unused directory, then build and install the compiled tarball:
+
+```sh
+git clone --branch codex/agent-install --single-branch https://github.com/jerrylee-1992/readar-cli.git readar-cli
+cd readar-cli
+npm ci
+npm pack
+npm install -g ./readar-cli-0.1.0.tgz
+readar --version
+readar --help
+```
+
+Install the tarball rather than using `npm install -g <git-url>`: some npm versions propagate global configuration into the Git build and fail to install build dependencies. If the global prefix is not writable, do not request sudo. Keep the checkout under an unused directory in the user's home and verify `node <checkout>/dist/main.js --version` and `--help`; use that full command prefix thereafter. Do not overwrite an existing checkout or change shell profiles without the user's request. On macOS/Linux, a global executable lives in `npm prefix -g` plus `/bin`; on Windows it lives in the prefix itself.
+
+Keep npm lifecycle scripts enabled for this Git package; `--ignore-scripts` prevents compilation. If the environment blocks lifecycle scripts, report that constraint instead of bypassing its policy.
+
+Network failures should be reported without repeatedly reinstalling. Installing does not send email or create a login session. Ask for login details only when the user also wants to sign in.
 
 ## After registry publication
 
