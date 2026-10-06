@@ -1,0 +1,16 @@
+{
+  "name": "readar-cli",
+  "version": "0.1.0",
+  "description": "Agent-friendly CLI for Readar collection, questions and notes",
+  "type": "module",
+  "bin": {"readar": "dist/main.js"},
+  "files": ["dist", "README.md", "docs/agent-install.md"],
+  "engines": {"node": ">=22"},
+  "scripts": {
+    "build": "tsc && node scripts/executable.mjs",
+    "check": "tsc --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {"@types/node": "^22.0.0", "typescript": "^5.0.0"}
+}
