@@ -4,7 +4,29 @@ A standalone TypeScript / Node.js client for agents to save AI output into Reada
 
 Requires Node.js 22 or newer. The CLI talks only to the Readar HTTP API. It has no backend, database or AI-provider dependencies.
 
-## Install from this checkout
+## One-sentence installation for agents
+
+Tell your agent:
+
+> 请按照 https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/docs/agent-install.md 安装 Readar CLI，验证版本和帮助，并告诉我后续调用命令。
+
+With Node.js 22+, npm and Git installed, install into npm's execution cache and run directly from this public repository with one command:
+
+```sh
+npx -y --package='git+https://github.com/jerrylee-1992/readar-cli.git#codex/agent-install' readar --help
+```
+
+The Git installation builds the executable automatically. No npm registry release, GitHub login or administrator permissions are required. The ref selects the installation-enabled branch; it can be replaced with a reviewed commit SHA for reproducible installs.
+
+Use the same prefix for subsequent commands, for example:
+
+```sh
+npx -y --package='git+https://github.com/jerrylee-1992/readar-cli.git#codex/agent-install' readar auth status
+```
+
+The agent guide also covers a permanent standalone executable installed from source. Installation does not sign you in; email verification remains a separate step.
+
+## Install from a checkout
 
 ```sh
 npm ci
@@ -19,14 +41,7 @@ To run without global installation:
 node dist/main.js --help
 ```
 
-This repository is ready to package with `npm pack`. It has **not** been published to npm. After a maintainer publishes the `readar-cli` package (subject to name availability), users can install or run it with:
-
-```sh
-npm install -g readar-cli
-npx -y --package readar-cli readar --help
-```
-
-For reproducible automation, replace the package name with a pinned version, such as `readar-cli@0.1.0` after that version has been published.
+This project has **not** been published to npm. Use the GitHub URL above; do not install a similarly named registry package. `npm pack` builds the compiled package automatically.
 
 ## Sign in
 

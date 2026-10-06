@@ -10,6 +10,7 @@
     "build": "tsc && node scripts/executable.mjs",
     "check": "tsc --noEmit",
     "test": "npm run build && node --test tests/*.test.mjs",
+    "prepare": "npm run build",
     "prepack": "npm run build"
   },
   "devDependencies": {"@types/node": "^22.0.0", "typescript": "^5.0.0"}
