@@ -8,7 +8,7 @@ Requires Node.js 22 or newer. The CLI talks only to the Readar HTTP API. It has 
 
 Tell your agent:
 
-> Please read https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md, follow the instructions to install and use Readar CLI.
+> Please read https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md, install the CLI and guide me through Readar login.
 
 The [Readar Skill](skills/readar/SKILL.md) covers installation, email login, collection, questions and notes, pagination and error handling. It is self-contained and included in the compiled package. Agents can read it directly; agents with native Skill support can install the `skills/readar` folder using their supported skill installer. Reading the URL alone does not register a skill for future automatic discovery.
 
@@ -26,7 +26,7 @@ Use the same prefix for subsequent commands, for example:
 npx -y --package='git+https://github.com/jerrylee-1992/readar-cli.git#codex/agent-install' readar auth status
 ```
 
-The agent guide also covers a permanent standalone executable installed from source. Installation does not sign you in; email verification remains a separate step.
+After verifying installation, the agent checks login status and guides you through email verification if needed. The default API is `https://readar-api.starmind.tech`; no API URL is needed for the official service. The agent guide also covers a permanent standalone executable installed from source.
 
 ## Install from a checkout
 
@@ -47,10 +47,10 @@ This project has **not** been published to npm. Use the GitHub URL above; do not
 
 ## Sign in
 
-On first use, specify your Readar API URL. Use HTTPS; HTTP is accepted only on localhost.
+The CLI defaults to `https://readar-api.starmind.tech`. Start email login without configuring an API URL:
 
 ```sh
-readar auth login --api-url https://YOUR-READAR-API --email you@example.com
+readar auth login --email you@example.com
 ```
 
 In a terminal, this sends the verification email and prompts for the code. In a noninteractive agent process, it returns a JSON challenge without prompting. Complete the login in a second command:
@@ -62,7 +62,7 @@ readar auth status
 
 `auth verify --challenge-id <id> --code <code>` also supports an explicitly supplied challenge ID.
 
-The API URL is remembered when a code is sent, and after successful verification. Any command can override it using `--api-url` or `READAR_API_URL`; precedence is flag, environment, saved URL. Always connect to the deployment containing the user's data.
+The API URL is remembered when a code is sent, and after successful verification. Any command can override it using `--api-url` or `READAR_API_URL`; precedence is flag, environment, saved URL, then the default API. Existing configured deployments are preserved. Custom URLs must use HTTPS; HTTP is accepted only on localhost.
 
 The backend already supports email login and email binding. Users with Apple-only accounts must bind an email in the Readar App first. The CLI does not implement Apple login or App device authorization. The backend's account access policy still applies; using an unbound email may create a different account or be denied by that policy.
 
