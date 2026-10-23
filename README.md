@@ -1,6 +1,6 @@
 # Readar CLI
 
-A standalone TypeScript / Node.js client for agents to save AI output into Readar and query the signed-in user's podcast questions and listening notes.
+A standalone TypeScript / Node.js client for agents to save AI output into Readar, search saved articles and podcast transcripts, and query the signed-in user's podcast questions and listening notes.
 
 Requires Node.js 22 or newer. The CLI talks only to the Readar HTTP API. It has no backend, database or AI-provider dependencies.
 
@@ -10,7 +10,7 @@ Tell your agent:
 
 > Please read https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md, install the CLI and guide me through Readar login.
 
-The [Readar Skill](skills/readar/SKILL.md) covers installation, email login, collection, questions and notes, pagination and error handling. It is self-contained and included in the compiled package. Agents can read it directly; agents with native Skill support can install the `skills/readar` folder using their supported skill installer. Reading the URL alone does not register a skill for future automatic discovery.
+The [Readar Skill](skills/readar/SKILL.md) covers installation, email login, collection, article/podcast search, questions and notes, pagination and error handling. It is self-contained and included in the compiled package. Agents can read it directly; agents with native Skill support can install the `skills/readar` folder using their supported skill installer. Reading the URL alone does not register a skill for future automatic discovery.
 
 With Node.js 22+, npm and Git installed, install into npm's execution cache and run directly from this public repository with one command:
 
@@ -88,6 +88,33 @@ readar collect --url https://example.com/article
 
 Results include `article.id`, `article.status`, and `created`. Plain text is stored as ready content. URLs use the existing ingestion flow. The backend deduplicates identical trimmed text or canonical URLs for the signed-in user; a duplicate returns the existing article with `created: false`, preserving its existing metadata and archive state. For Markdown, the first line becomes the collector title. Markdown is stored as submitted text; it is not converted to HTML.
 
+## Search saved articles and podcasts
+
+Describe the idea you want to find; the default hybrid mode combines keyword and semantic retrieval:
+
+```sh
+readar search --query "让 AI 帮我操作软件" --type all
+readar search --query "浏览器代理" --type articles --exclude-archived
+readar search --query "怎样记住读过的内容" --type episodes
+readar search --query "Agent" --mode keyword --limit 20
+```
+
+`--query` is required and accepts 1–500 characters after trimming. Choose `--type all|articles|episodes` (default `all`); `episodes` means podcast titles and generated transcripts. The scope includes only the signed-in account's saved content. Archived articles are included by default; `--exclude-archived` excludes them and has no effect on podcasts. Title and body are always searched together; there is no `--fields` option. Question/answer and listening-note search remain separate commands below.
+
+`--mode hybrid|keyword` defaults to `hybrid`. Hybrid requires both retrieval paths to succeed. The CLI never silently downgrades to keyword mode or scans local records. Use `--mode keyword` explicitly when you want keyword retrieval. `--limit` accepts 1–50, default 20. Each page makes one authenticated `GET /v1/search` request, apart from normal session refresh if needed.
+
+JSON results preserve each record's `id`, `type`, `title`, `source_version`, original `snippets` and `anchor`, plus `search_mode`, `consistency`, `indexing_status`, `candidate_limit_reached`, `has_more` and `next_cursor`. Article `paragraph_index` is zero-based; podcast `segment_number` identifies a transcript segment. `position_seconds` is available only when the backend has a reliable timeline, with the corresponding `track_version`. A null anchor or time must stay null; do not estimate playback time from text length. Snippets are source excerpts, not generated summaries.
+
+```sh
+readar search --query "怎样记住读过的内容" --type episodes --cursor '<next_cursor>'
+```
+
+Treat the returned cursor as opaque and pass it unchanged with the same API, account, query, type, archive selection and mode. The page limit may change. Article/podcast cursors and question/note cursors cannot be exchanged. Continue until `next_cursor` is null, including after a page with no items. Content changes and permission checks can remove candidates from an intermediate page. `candidate_limit_reached: true` means the bounded candidate set reached its cap; it is not an exhaustive count of matches. Narrow the query or content type when more coverage is needed.
+
+`consistency: "eventual"` means newly saved or changed content can take time to appear. `indexing_status: "partial"` reports incomplete index coverage; `ready` reports the backend's current coverage status. Neither an empty page nor a partial index proves the account has no matching content. The server rechecks source versions and ownership before returning evidence.
+
+**Availability:** Use a reviewed CLI revision whose `--help` lists `search`; the installation branch above may predate this command. The selected backend must separately deploy, configure and backfill `GET /v1/search`. Installing this package or its skill does not enable semantic search on a server. An unconfigured or unavailable backend returns HTTP 503 `search_unavailable` (exit 1), with no successful empty fallback. HTTP 410 `search_expired` (exit 2) means start a new search without `--cursor`; HTTP 422 `invalid_cursor` means discard the old cursor and restart. This repository's loopback tests do not establish production deployment or index readiness.
+
 ## Query questions and notes
 
 ```sh
@@ -147,6 +174,6 @@ npm test
 npm pack
 ```
 
-The tests execute the built CLI as independent processes against a real loopback HTTP server. They cover the existing API contract, pagination, filtering, authentication, refresh rotation, concurrent processes, input validation and credential redaction. They do not prove production mail delivery or a production account login.
+The tests execute the built CLI as independent processes against real loopback HTTP servers. They cover the API contracts, content-search scopes and modes, source anchors, partial/empty pages, cursor isolation and expiry, pagination, filtering, authentication, refresh rotation, concurrent processes, input validation and credential redaction. They do not prove production mail delivery, a production account login, semantic retrieval quality or backend deployment.
 
 The package includes compiled JavaScript and documentation. TypeScript and Node type definitions are development-only dependencies. `npm pack` builds automatically; registry publishing is a separate maintainer action.

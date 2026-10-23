@@ -56,10 +56,18 @@ The maintainer must update this guide with the verified package name and release
 ## Usage
 
 - Save generated text: `readar collect --file <file>` or pipe it to `readar collect --stdin`. Prefer a file or stdin for large content and shell-sensitive text.
+- Search saved articles and podcast transcripts semantically: `readar search --query "怎样记住读过的内容" --type all`. Select `articles` or `episodes` when the user names that scope; `all` is the default and does not include questions or notes. Title and body are always searched together; there is no `--fields` selector.
+- Article/podcast search includes archived articles by default. Add `--exclude-archived` when requested; it does not filter podcasts. Use a natural-language description of the intended meaning for hybrid search. `--mode hybrid` is the default; choose `--mode keyword` explicitly for keyword retrieval. `--query` is required (1–500 characters); `--limit` is 1–50, default 20.
 - Search user questions: `readar questions list --query <text>`.
 - Search user notes: `readar notes list --query <text>`.
 - Read one result: `readar questions get <id>` or `readar notes get <id>`. Use `--episode <id>` from a previous result to narrow the scope.
 - Parse JSON stdout; inspect exit code and JSON stderr. Keep stdout and stderr separate.
-- Continue lists using `next_cursor` with the same filters. A null cursor means no further matching records.
+- Continue lists using `next_cursor` with the same filters. A null cursor ends that listing's continuation; check content-search candidate caps as described below.
 - Handle exit 3 by explaining that login is required. Do not loop login or refresh attempts.
-- Global searches use the server full-text index with one request per page. Saved or edited content appears asynchronously. On `search_unavailable`, retry later; do not fall back to scanning episodes. Follow `next_cursor` until null, including after an empty page.
+- Question/note searches use the server full-text index with one request per page. Saved or edited content appears asynchronously. On `search_unavailable`, retry later; do not fall back to scanning episodes. Follow `next_cursor` until null, including after an empty page.
+
+Article/podcast search needs a reviewed CLI revision whose `--help` lists `search`; the installation ref above may predate it. The backend must separately deploy and configure `GET /v1/search` and backfill its index. This guide does not confirm that production has enabled the endpoint. The skill supplies command guidance, not embeddings or server capabilities.
+
+For `search`, preserve original result snippets, record IDs/types, `source_version` and anchors when citing evidence. A null `position_seconds` is not a playback timestamp. Report `search_mode`, eventual consistency, and `indexing_status: partial` when relevant. An empty intermediate page may still have `next_cursor`; continue with the same account, API, query, type, archive selection and mode. Cursors are opaque and separate from question/note cursors; the page limit may change. `candidate_limit_reached` means the server capped this candidate set, not that all matches have been exhausted.
+
+Hybrid failure remains a failure: do not silently rerun keyword mode or interpret a service error as no matches. HTTP 503 `search_unavailable` (exit 1) can mean missing backend configuration; report it. An explicitly requested keyword retry may use `--mode keyword` as a new search. HTTP 410 `search_expired` (exit 2) requires a new search without `--cursor`; `invalid_cursor` also requires discarding the old cursor. Successful installation, local contract tests and backend deployment are separate checks.

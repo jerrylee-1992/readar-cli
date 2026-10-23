@@ -8,6 +8,7 @@ import { Client, normalizeURL } from './client.js';
 import { CLIError, invalid } from './errors.js';
 import { savedURL, saveURL } from './store.js';
 import { listRecords, getRecord, dateValue, parseCursor, type Kind } from './records.js';
+import { searchContents, searchFilters } from './search.js';
 
 const HELP = `Readar CLI 0.1.0 — agent-friendly collector and personal history client
 
@@ -17,6 +18,8 @@ Usage:
   readar auth status
   readar auth logout [--local]
   readar collect (--stdin | --file <path> | --text <text> | --url <url>) [--note <text>]
+  readar search --query <text> [--type all|articles|episodes] [--exclude-archived]
+                [--mode hybrid|keyword] [--limit <1..50>] [--cursor <next_cursor>]
   readar questions list [--query <text>] [--episode <id>] [--since <date>] [--until <date>]
                        [--limit <1..100>] [--cursor <next_cursor>]
   readar questions get <id> [--episode <id>]
@@ -33,6 +36,8 @@ JSON results go to stdout. JSON errors and interactive prompts go to stderr.
 Dates use UTC; --since is inclusive, --until is exclusive.
 Noninteractive auth login sends a code; auth verify completes login.
 Questions and notes use global server APIs. Full-text search is eventually consistent.
+Article/podcast search always covers title and body; default all, archived included, hybrid.
+Search requires GET /v1/search on the selected backend; indexing is eventually consistent.
 Exit codes: 0 success, 1 network/config/server, 2 usage/input, 3 login required, 4 not found.
 `;
 function options(argv: string[]) {
@@ -42,6 +47,7 @@ function options(argv: string[]) {
     stdin: { type: 'boolean' }, file: { type: 'string' }, text: { type: 'string' }, url: { type: 'string' }, note: { type: 'string' },
     query: { type: 'string' }, episode: { type: 'string' }, since: { type: 'string' }, until: { type: 'string' },
     limit: { type: 'string' }, cursor: { type: 'string' }, kind: { type: 'string' },
+    type: { type: 'string' }, mode: { type: 'string' }, 'exclude-archived': { type: 'boolean' },
   } }); } catch { return invalid('Unknown option or missing option value. Run readar --help.'); }
 }
 async function readText(input: Readable): Promise<string> {
@@ -57,17 +63,20 @@ async function main(): Promise<void> {
   const allowed: Record<string, string[]> = {
     'auth login': ['email'], 'auth verify': ['code', 'challenge-id'], 'auth status': [], 'auth logout': ['local'],
     collect: ['stdin', 'file', 'text', 'url', 'note'],
+    search: ['query', 'type', 'exclude-archived', 'mode', 'limit', 'cursor'],
     'questions list': ['query', 'episode', 'since', 'until', 'limit', 'cursor'], 'questions get': ['episode'],
     'notes list': ['query', 'episode', 'since', 'until', 'limit', 'cursor', 'kind'], 'notes get': ['episode'],
   };
-  const name = command === 'collect' ? command : `${command} ${action}`;
+  const name = ['collect', 'search'].includes(command!) ? command! : `${command} ${action}`;
   if (!allowed[name]) invalid('Unknown command. Run readar --help.');
   for (const k of Object.keys(v)) if (!['api-url', 'help', 'version', ...allowed[name]!].includes(k)) invalid(`--${k} is not valid for ${name}.`);
-  const expected = command === 'collect' ? 1 : action === 'get' ? 3 : 2;
+  const expected = ['collect', 'search'].includes(command!) ? 1 : action === 'get' ? 3 : 2;
   if (p.length !== expected) invalid(`Incorrect arguments for ${name}. Run readar --help.`);
-  const limit = v.limit === undefined ? 30 : Number(v.limit);
-  if (!Number.isInteger(limit) || limit < 1 || limit > 100) invalid('--limit must be an integer from 1 to 100.');
-  dateValue(v.since, '--since'); dateValue(v.until, '--until'); parseCursor(v.cursor);
+  const search = command === 'search' ? searchFilters({ query: v.query, type: v.type, excludeArchived: v['exclude-archived'], mode: v.mode, limit: v.limit, cursor: v.cursor }) : undefined;
+  const limit = search ? search.limit : v.limit === undefined ? 30 : Number(v.limit);
+  if (!search && (!Number.isInteger(limit) || limit < 1 || limit > 100)) invalid('--limit must be an integer from 1 to 100.');
+  dateValue(v.since, '--since'); dateValue(v.until, '--until');
+  if (!search) parseCursor(v.cursor);
   if (v.kind && !['thought', 'question'].includes(v.kind)) invalid('--kind must be thought or question.');
   if (v.episode !== undefined && !v.episode.trim()) invalid('--episode cannot be empty.');
   if (v.code !== undefined && !/^\d{6}$/.test(v.code)) invalid('--code must have six digits.');
@@ -100,6 +109,8 @@ async function main(): Promise<void> {
     if (v.note && Array.from(v.note).length > 4000) invalid('--note exceeds 4,000 characters.');
     if (v.url !== undefined) { let u: URL; try { u = new URL(v.url); } catch { return invalid('--url must be an HTTP or HTTPS URL.'); } if (!['http:', 'https:'].includes(u.protocol) || v.url.length > 8192) invalid('Invalid collection URL.'); }
     result = await client.request('/v1/articles', 'POST', { ...(text === undefined ? { url: v.url } : { text }), note: v.note || '' });
+  } else if (search) {
+    result = await searchContents(client, search);
   } else {
     const kind = command as Kind;
     result = action === 'list' ? await listRecords(client, kind, { query: v.query, episode: v.episode, since: v.since, until: v.until, kind: v.kind, limit, cursor: v.cursor }) : await getRecord(client, kind, p[2]!, v.episode);
