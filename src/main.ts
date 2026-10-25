@@ -18,7 +18,7 @@ Usage:
   readar auth status
   readar auth logout [--local]
   readar collect (--stdin | --file <path> | --text <text> | --url <url>) [--note <text>]
-  readar search --query <text> [--type all|articles|episodes] [--exclude-archived]
+  readar search --query <text> [--type all|articles|episodes|questions|thoughts] [--exclude-archived]
                 [--mode hybrid|keyword] [--limit <1..50>] [--cursor <next_cursor>]
   readar questions list [--query <text>] [--episode <id>] [--since <date>] [--until <date>]
                        [--limit <1..100>] [--cursor <next_cursor>]
@@ -36,7 +36,9 @@ JSON results go to stdout. JSON errors and interactive prompts go to stderr.
 Dates use UTC; --since is inclusive, --until is exclusive.
 Noninteractive auth login sends a code; auth verify completes login.
 Questions and notes use global server APIs. Full-text search is eventually consistent.
-Article/podcast search always covers title and body; default all, archived included, hybrid.
+Search covers articles, podcasts, questions/answers and thought notes; default all, archived included, hybrid.
+Questions/notes list retain keyword and date filters. Thoughts scope excludes question-kind notes.
+Child search hits use raw record_id with questions/notes get --episode <episode_id>.
 Search requires GET /v1/search on the selected backend; indexing is eventually consistent.
 Exit codes: 0 success, 1 network/config/server, 2 usage/input, 3 login required, 4 not found.
 `;

@@ -1,6 +1,6 @@
 # Readar CLI
 
-A standalone TypeScript / Node.js client for agents to save AI output into Readar, search saved articles and podcast transcripts, and query the signed-in user's podcast questions and listening notes.
+A standalone TypeScript / Node.js client for agents to save AI output into Readar and search the signed-in user's saved articles, podcast transcripts, questions/answers and personal thoughts.
 
 Requires Node.js 22 or newer. The CLI talks only to the Readar HTTP API. It has no backend, database or AI-provider dependencies.
 
@@ -10,7 +10,7 @@ Tell your agent:
 
 > Please read https://github.com/jerrylee-1992/readar-cli/blob/codex/agent-install/skills/readar/SKILL.md, install the CLI and guide me through Readar login.
 
-The [Readar Skill](skills/readar/SKILL.md) covers installation, email login, collection, article/podcast search, questions and notes, pagination and error handling. It is self-contained and included in the compiled package. Agents can read it directly; agents with native Skill support can install the `skills/readar` folder using their supported skill installer. Reading the URL alone does not register a skill for future automatic discovery.
+The [Readar Skill](skills/readar/SKILL.md) covers installation, email login, collection, unified semantic search, question/note listings, pagination and error handling. It is self-contained and included in the compiled package. Agents can read it directly; agents with native Skill support can install the `skills/readar` folder using their supported skill installer. Reading the URL alone does not register a skill for future automatic discovery.
 
 With Node.js 22+, npm and Git installed, install into npm's execution cache and run directly from this public repository with one command:
 
@@ -88,7 +88,7 @@ readar collect --url https://example.com/article
 
 Results include `article.id`, `article.status`, and `created`. Plain text is stored as ready content. URLs use the existing ingestion flow. The backend deduplicates identical trimmed text or canonical URLs for the signed-in user; a duplicate returns the existing article with `created: false`, preserving its existing metadata and archive state. For Markdown, the first line becomes the collector title. Markdown is stored as submitted text; it is not converted to HTML.
 
-## Search saved articles and podcasts
+## Search saved content semantically
 
 Describe the idea you want to find; the default hybrid mode combines keyword and semantic retrieval:
 
@@ -96,26 +96,37 @@ Describe the idea you want to find; the default hybrid mode combines keyword and
 readar search --query "让 AI 帮我操作软件" --type all
 readar search --query "浏览器代理" --type articles --exclude-archived
 readar search --query "怎样记住读过的内容" --type episodes
+readar search --query "怎样记住读过的内容" --type questions
+readar search --query "读完后用自己的话复述" --type thoughts
 readar search --query "Agent" --mode keyword --limit 20
 ```
 
-`--query` is required and accepts 1–500 characters after trimming. Choose `--type all|articles|episodes` (default `all`); `episodes` means podcast titles and generated transcripts. The scope includes only the signed-in account's saved content. Archived articles are included by default; `--exclude-archived` excludes them and has no effect on podcasts. Title and body are always searched together; there is no `--fields` option. Question/answer and listening-note search remain separate commands below.
+`--query` is required and accepts 1–500 characters after trimming. Choose `--type all|articles|episodes|questions|thoughts` (default `all`). `all` includes all four content types; `episodes` searches podcast titles and generated transcripts, `questions` searches question text, full answers and answer summaries, and `thoughts` searches only notes whose kind is `thought`, excluding question-kind notes. The scope includes only the signed-in account's saved content. Archived articles are included by default; `--exclude-archived` excludes them and has no effect on the other types. Title and body are always searched together; there is no `--fields` option. Existing `questions list` and `notes list` commands below retain keyword, date and episode filters.
 
 `--mode hybrid|keyword` defaults to `hybrid`. Hybrid requires both retrieval paths to succeed. The CLI never silently downgrades to keyword mode or scans local records. Use `--mode keyword` explicitly when you want keyword retrieval. `--limit` accepts 1–50, default 20. Each page makes one authenticated `GET /v1/search` request, apart from normal session refresh if needed.
 
-JSON results preserve each record's `id`, `type`, `title`, `source_version`, original `snippets` and `anchor`, plus `search_mode`, `consistency`, `indexing_status`, `candidate_limit_reached`, `has_more` and `next_cursor`. Article `paragraph_index` is zero-based; podcast `segment_number` identifies a transcript segment. `position_seconds` is available only when the backend has a reliable timeline, with the corresponding `track_version`. A null anchor or time must stay null; do not estimate playback time from text length. Snippets are source excerpts, not generated summaries.
+JSON results preserve each record's `id`, `type`, `title`, `source_version`, original `snippets` and `anchor`, plus `search_mode`, `consistency`, `indexing_status`, `candidate_limit_reached`, `has_more` and `next_cursor`. Article `paragraph_index` is zero-based; podcast `segment_number` identifies a transcript segment. Episode transcript playback positions require the corresponding `track_version`. For questions/thoughts, `paragraph_index` locates the text chunk, `position_seconds` is the record's canonical episode position or null, and `segment_number`/`track_version` are null. That canonical position does not establish a natural/generated transcript track seek time. A null anchor or time must stay null; do not estimate playback time from text length. Snippets are source excerpts, not generated summaries.
+
+Question/thought hits also preserve `record_id`, `episode_id` and `episode_title`. Their `id` is an opaque composite search identity; do not split it or pass it to a detail command. Retrieve the exact parent-scoped record using its raw `record_id` and `episode_id`:
+
+```sh
+readar questions get <record_id> --episode <episode_id>
+readar notes get <record_id> --episode <episode_id>
+```
+
+Use `questions get` for a `questions` hit and `notes get` for a `thoughts` hit.
 
 ```sh
 readar search --query "怎样记住读过的内容" --type episodes --cursor '<next_cursor>'
 ```
 
-Treat the returned cursor as opaque and pass it unchanged with the same API, account, query, type, archive selection and mode. The page limit may change. Article/podcast cursors and question/note cursors cannot be exchanged. Continue until `next_cursor` is null, including after a page with no items. Content changes and permission checks can remove candidates from an intermediate page. `candidate_limit_reached: true` means the bounded candidate set reached its cap; it is not an exhaustive count of matches. Narrow the query or content type when more coverage is needed.
+Treat the returned cursor as opaque and pass it unchanged with the same API, account, query, type, archive selection and mode. The page limit may change. Unified search cursors and question/note listing cursors cannot be exchanged; a `questions` search cursor cannot continue a `thoughts` or `all` search. Continue until `next_cursor` is null, including after a page with no items. Content changes and permission checks can remove candidates from an intermediate page. `candidate_limit_reached: true` means the bounded candidate set reached its cap; it is not an exhaustive count of matches. Narrow the query or content type when more coverage is needed.
 
 `consistency: "eventual"` means newly saved or changed content can take time to appear. `indexing_status: "partial"` reports incomplete index coverage; `ready` reports the backend's current coverage status. Neither an empty page nor a partial index proves the account has no matching content. The server rechecks source versions and ownership before returning evidence.
 
-**Availability:** Use a reviewed CLI revision whose `--help` lists `search`; the installation branch above may predate this command. The selected backend must separately deploy, configure and backfill `GET /v1/search`. Installing this package or its skill does not enable semantic search on a server. An unconfigured or unavailable backend returns HTTP 503 `search_unavailable` (exit 1), with no successful empty fallback. HTTP 410 `search_expired` (exit 2) means start a new search without `--cursor`; HTTP 422 `invalid_cursor` means discard the old cursor and restart. This repository's loopback tests do not establish production deployment or index readiness.
+**Availability:** Use a reviewed CLI revision whose `--help` lists `search` and the required `questions`/`thoughts` scopes; the installation branch above may predate these features. The selected backend must separately deploy, configure and backfill `GET /v1/search` for all required types. Installing this package or its skill does not enable semantic search on a server. An unconfigured or unavailable backend returns HTTP 503 `search_unavailable` (exit 1), with no successful empty fallback. HTTP 410 `search_expired` (exit 2) means start a new search without `--cursor`; HTTP 422 `invalid_cursor` means discard the old cursor and restart. This repository's loopback tests do not establish production deployment or index readiness.
 
-## Query questions and notes
+## List questions and notes by keyword or filters
 
 ```sh
 readar questions list --query "asset allocation" --limit 20
@@ -125,7 +136,7 @@ readar notes list --query "idea" --kind thought --since 2026-10-01
 readar notes get <note-id> --episode <episode-id>
 ```
 
-Question search covers question text, answers and answer summaries; heard-answer text is a subset of the generated answer. Note search covers note text. Search uses the server’s Tablestore full-text index with Chinese tokenization and case-insensitive English matching; it is not semantic search. A query requires matching all analyzed words within at least one searched field. Newly saved or edited content may take seconds to tens of seconds to appear. Notes include both `thought` and `question` kinds unless filtered. Queries use the signed-in user's existing API permissions.
+The existing `questions list --query` covers question text, answers and answer summaries; heard-answer text is a subset of the generated answer. `notes list --query` covers note text. These listing queries use the server’s Tablestore full-text index with Chinese tokenization and case-insensitive English matching; use unified `search --type questions|thoughts` above for semantic retrieval. A listing query requires matching all analyzed words within at least one searched field. Newly saved or edited content may take seconds to tens of seconds to appear. Notes include both `thought` and `question` kinds unless filtered. Queries use the signed-in user's existing API permissions.
 
 Every returned row includes `episode_id` and `episode_title`. Question responses preserve full answers, status, source article IDs and available listening information. Notes preserve text, position, revision and timestamps.
 

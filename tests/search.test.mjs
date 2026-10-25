@@ -20,6 +20,23 @@ const episode = {
   snippets: [{ text: '讲稿原文：复述有助于记忆。', field: 'body', anchor: { paragraph_index: null, segment_number: 7, position_seconds: 92.5, track_version: 'track-2' } }],
   anchor: { paragraph_index: null, segment_number: 7, position_seconds: 92.5, track_version: 'track-2' },
 };
+const question = {
+  id: '11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222',
+  record_id: '22222222-2222-4222-8222-222222222222', type: 'questions',
+  episode_id: '11111111-1111-4111-8111-111111111111', episode_title: '从阅读到记忆',
+  title: '怎样记住读过的内容？', created_at: '2026-10-24T01:00:00+00:00', archived: false, source_version: 'question-sha256',
+  snippets: [{ text: '完整回答原文：主动回忆比反复阅读有效。', field: 'body', anchor: { paragraph_index: 1, segment_number: null, position_seconds: 32, track_version: null } }],
+  anchor: { paragraph_index: 1, segment_number: null, position_seconds: 32, track_version: null },
+};
+const thought = {
+  id: '11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333',
+  record_id: '33333333-3333-4333-8333-333333333333', type: 'thoughts',
+  episode_id: '11111111-1111-4111-8111-111111111111', episode_title: '从阅读到记忆',
+  title: '用自己的话复述', created_at: '2026-10-24T02:00:00+00:00', archived: false, source_version: 'thought-sha256',
+  snippets: [{ text: '下次读完一章就闭上书复述。', field: 'body', anchor: { paragraph_index: 0, segment_number: null, position_seconds: 41.2, track_version: null } }],
+  anchor: { paragraph_index: 0, segment_number: null, position_seconds: 41.2, track_version: null },
+};
+let childOverride;
 
 before(async () => {
   server = createServer(async (req, res) => {
@@ -32,6 +49,10 @@ before(async () => {
     if (route === '/v1/auth/email/codes') return send({ challenge_id: 'search-challenge', expires_in: 600, resend_after: 60 });
     if (route === '/v1/auth/email/verify') return send({ access_token: 'ra_search', refresh_token: 'rr_search', expires_in: 900, user: { id: account, identities: [] } });
     if (!req.headers.authorization) return send({ error: { code: 'unauthorized' } }, 401);
+    if (path.searchParams.get('episode') === question.episode_id) {
+      if (route === `/v1/questions/${question.record_id}`) return send({ id: question.record_id, episode_id: question.episode_id, episode_title: question.episode_title, question: question.title, answer: '主动回忆比反复阅读有效。', status: 'ready', created_at: question.created_at });
+      if (route === `/v1/notes/${thought.record_id}`) return send({ id: thought.record_id, episode_id: thought.episode_id, episode_title: thought.episode_title, kind: 'thought', text: '下次读完一章就闭上书复述。', position_seconds: 41.2, revision: 1, created_at: thought.created_at });
+    }
     if (route !== '/v1/search') return send({ error: { code: 'not_found' } }, 404);
     if (scenario === 'unavailable') return send({ error: { code: 'search_unavailable', message: 'ra_search rr_search provider secret' } }, 503);
     if (scenario === 'expired') return send({ error: { code: 'search_expired' } }, 410);
@@ -47,6 +68,14 @@ before(async () => {
     if (scenario === 'unknown-index-status') result.indexing_status = 'unavailable';
     if (scenario === 'inconsistent-pagination') result.has_more = false;
     if (scenario === 'title-only') result.items = [{ ...article, snippets: [{ text: article.title, field: 'title', anchor: null }], anchor: null }];
+    if (scenario === 'records') {
+      result.items = { all: [article, episode, question, thought], questions: [question], thoughts: [thought] }[path.searchParams.get('type')];
+    }
+    if (scenario === 'malformed-child') result.items = [childOverride];
+    if (scenario === 'nullable-child') result.items = [
+      { ...question, anchor: null, snippets: [{ text: question.title, field: 'title', anchor: null }] },
+      { ...thought, anchor: { ...thought.anchor, position_seconds: null }, snippets: [] },
+    ];
     return send(result);
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -55,7 +84,7 @@ before(async () => {
 after(async () => { await new Promise(r => server.close(r)); });
 beforeEach(async t => {
   dir = await mkdtemp(join(tmpdir(), 'readar-search-test-'));
-  requests = []; scenario = ''; account = 'search-user-1';
+  requests = []; scenario = ''; account = 'search-user-1'; childOverride = undefined;
   t.after(() => rm(dir, { recursive: true, force: true }));
 });
 function run(args) {
@@ -94,6 +123,87 @@ test('content scope, archive exclusion, explicit keyword mode and page size reac
   }
 });
 
+test('unified all search preserves article, episode, question and thought source evidence', async () => {
+  await login(); scenario = 'records';
+  const result = page(await run(['search', '--query', 'ways to remember reading']));
+  assert.deepEqual(result.items, [article, episode, question, thought]);
+  assert.equal(requests.length, 1);
+  assert.equal(new URL(requests[0].path, url).searchParams.get('type'), 'all');
+});
+
+test('questions and thoughts scopes reach unified search and retain raw record IDs and canonical positions', async () => {
+  await login(); scenario = 'records';
+  for (const [type, expected] of [['questions', question], ['thoughts', thought]]) {
+    const result = page(await run(['search', '--query', 'ways to remember reading', '--type', type, '--exclude-archived']));
+    assert.deepEqual(result.items, [expected]);
+    assert.deepEqual(Object.fromEntries(new URL(requests.at(-1).path, url).searchParams), {
+      q: 'ways to remember reading', type, include_archived: 'false', mode: 'hybrid', limit: '20',
+    });
+  }
+  assert.equal(requests.length, 2);
+});
+
+test('search child raw IDs retrieve exact records with parent context through existing detail commands', async () => {
+  await login(); scenario = 'records';
+  const result = page(await run(['search', '--query', 'remember reading']));
+  requests = [];
+  for (const type of ['questions', 'thoughts']) {
+    const hit = result.items.find(item => item.type === type);
+    const detail = page(await run([type === 'questions' ? 'questions' : 'notes', 'get', hit.record_id, '--episode', hit.episode_id]));
+    assert.equal(detail.id, hit.record_id); assert.equal(detail.episode_id, '11111111-1111-4111-8111-111111111111');
+  }
+  assert.deepEqual(requests.map(request => request.path), [
+    '/v1/questions/22222222-2222-4222-8222-222222222222?episode=11111111-1111-4111-8111-111111111111',
+    '/v1/notes/33333333-3333-4333-8333-333333333333?episode=11111111-1111-4111-8111-111111111111',
+  ]);
+});
+
+test('child title-only and missing-time hits preserve nulls without inventing track evidence', async () => {
+  await login(); scenario = 'nullable-child';
+  const result = page(await run(['search', '--query', 'memory']));
+  assert.equal(result.items[0].anchor, null);
+  assert.deepEqual(result.items[0].snippets, [{ text: '怎样记住读过的内容？', field: 'title', anchor: null }]);
+  assert.deepEqual(result.items[1].anchor, { paragraph_index: 0, segment_number: null, position_seconds: null, track_version: null });
+});
+
+test('question and thought search cursors cannot cross new scopes or the all scope', async () => {
+  await login(); scenario = 'records';
+  const cursor = page(await run(['search', '--query', 'memory', '--type', 'questions'])).next_cursor;
+  requests = [];
+  for (const type of ['thoughts', 'all', 'episodes']) {
+    const result = await run(['search', '--query', 'memory', '--type', type, '--cursor', cursor]);
+    assert.equal(result.code, 2, result.err); assert.equal(result.out, '');
+    assert.equal(JSON.parse(result.err).error.code, 'invalid_input');
+  }
+  assert.deepEqual(requests, []);
+});
+
+test('malformed child IDs, parent context, source versions, snippets and anchors fail without emitting evidence', async () => {
+  await login(); scenario = 'malformed-child';
+  const { record_id, ...missingRecordID } = question;
+  const { episode_id, ...missingEpisodeID } = question;
+  const { anchor, ...missingAnchor } = thought;
+  for (const item of [
+    missingRecordID, { ...question, record_id: question.id }, { ...question, record_id: '' },
+    missingEpisodeID, { ...question, episode_id: '' }, { ...question, episode_title: 42 },
+    { ...question, episode_id: 'not-a-uuid' },
+    { ...question, source_version: null }, { ...question, id: '' },
+    { ...question, snippets: [{ text: 42, field: 'body', anchor: null }] },
+    { ...question, snippets: [{ text: 'answer', field: null, anchor: null }] },
+    missingAnchor, { ...thought, anchor: { ...thought.anchor, position_seconds: -1 } },
+    { ...thought, anchor: { ...thought.anchor, position_seconds: '41.2' } },
+    { ...thought, anchor: { ...thought.anchor, paragraph_index: -1 } },
+    { ...thought, anchor: { ...thought.anchor, segment_number: 7 } },
+    { ...thought, anchor: { ...thought.anchor, track_version: 'natural-track-1' } },
+    { ...thought, snippets: [{ text: 'thought', field: 'body', anchor: '41.2' }] },
+  ]) {
+    childOverride = item;
+    const result = await run(['search', '--query', 'memory']);
+    assert.equal(result.code, 1, `Accepted malformed child: ${JSON.stringify(item)}`); assert.equal(result.out, '');
+    assert.equal(JSON.parse(result.err).error.code, 'invalid_response');
+  }
+});
+
 test('search continues an opaque server cursor and preserves podcast anchors and candidate cap', async () => {
   await login();
   const first = page(await run(['search', '--query', 'memory', '--limit', '1']));
@@ -125,7 +235,7 @@ test('a title-only search hit retains null anchors without inventing paragraph o
 test('search rejects missing queries, field selectors and invalid options before any HTTP request', async () => {
   for (const args of [
     ['search'], ['search', '--query', ' '], ['search', '--query', 'a'.repeat(501)],
-    ['search', '--query', 'x', '--type', 'questions'], ['search', '--query', 'x', '--mode', 'semantic'],
+    ['search', '--query', 'x', '--type', 'notes'], ['search', '--query', 'x', '--mode', 'semantic'],
     ['search', '--query', 'x', '--fields', 'title'], ['search', '--query', 'x', '--episode', 'ep-1'],
     ['search', '--query', 'x', '--limit', '0'], ['search', '--query', 'x', '--limit', '51'],
     ['search', '--query', 'x', '--limit', '1.5'], ['search', 'extra', '--query', 'x'],
