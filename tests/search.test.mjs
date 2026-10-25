@@ -69,7 +69,8 @@ before(async () => {
     if (scenario === 'inconsistent-pagination') result.has_more = false;
     if (scenario === 'title-only') result.items = [{ ...article, snippets: [{ text: article.title, field: 'title', anchor: null }], anchor: null }];
     if (scenario === 'records') {
-      result.items = { all: [article, episode, question, thought], questions: [question], thoughts: [thought] }[path.searchParams.get('type')];
+      const all = path.searchParams.get('include_records') === 'true' ? [article, episode, question, thought] : [article, episode];
+      result.items = { all, questions: [question], thoughts: [thought] }[path.searchParams.get('type')];
     }
     if (scenario === 'malformed-child') result.items = [childOverride];
     if (scenario === 'nullable-child') result.items = [
@@ -106,7 +107,7 @@ function page(result) { assert.equal(result.code, 0, result.err); assert.equal(r
 test('content search defaults to one authenticated hybrid request and preserves source evidence', async () => {
   await login();
   const result = page(await run(['search', '--query', '  让 AI 帮我操作软件  ']));
-  assert.deepEqual(requests, [{ method: 'GET', path: '/v1/search?q=%E8%AE%A9+AI+%E5%B8%AE%E6%88%91%E6%93%8D%E4%BD%9C%E8%BD%AF%E4%BB%B6&type=all&include_archived=true&mode=hybrid&limit=20', auth: 'Bearer ra_search' }]);
+  assert.deepEqual(requests, [{ method: 'GET', path: '/v1/search?q=%E8%AE%A9+AI+%E5%B8%AE%E6%88%91%E6%93%8D%E4%BD%9C%E8%BD%AF%E4%BB%B6&type=all&include_archived=true&mode=hybrid&limit=20&include_records=true', auth: 'Bearer ra_search' }]);
   assert.deepEqual(result.items, [article]);
   assert.equal(result.search_mode, 'hybrid'); assert.equal(result.consistency, 'eventual');
   assert.equal(result.indexing_status, 'ready'); assert.equal(result.candidate_limit_reached, false);
@@ -119,7 +120,7 @@ test('content scope, archive exclusion, explicit keyword mode and page size reac
     page(await run(['search', '--query', 'browser agents', '--type', type, '--exclude-archived', '--mode', 'keyword', '--limit', '50']));
     const request = new URL(requests.at(-1).path, url);
     assert.equal(request.pathname, '/v1/search');
-    assert.deepEqual(Object.fromEntries(request.searchParams), { q: 'browser agents', type, include_archived: 'false', mode: 'keyword', limit: '50' });
+    assert.deepEqual(Object.fromEntries(request.searchParams), { q: 'browser agents', type, include_archived: 'false', mode: 'keyword', limit: '50', include_records: 'true' });
   }
 });
 
@@ -129,6 +130,7 @@ test('unified all search preserves article, episode, question and thought source
   assert.deepEqual(result.items, [article, episode, question, thought]);
   assert.equal(requests.length, 1);
   assert.equal(new URL(requests[0].path, url).searchParams.get('type'), 'all');
+  assert.equal(new URL(requests[0].path, url).searchParams.get('include_records'), 'true');
 });
 
 test('questions and thoughts scopes reach unified search and retain raw record IDs and canonical positions', async () => {
@@ -137,7 +139,7 @@ test('questions and thoughts scopes reach unified search and retain raw record I
     const result = page(await run(['search', '--query', 'ways to remember reading', '--type', type, '--exclude-archived']));
     assert.deepEqual(result.items, [expected]);
     assert.deepEqual(Object.fromEntries(new URL(requests.at(-1).path, url).searchParams), {
-      q: 'ways to remember reading', type, include_archived: 'false', mode: 'hybrid', limit: '20',
+      q: 'ways to remember reading', type, include_archived: 'false', mode: 'hybrid', limit: '20', include_records: 'true',
     });
   }
   assert.equal(requests.length, 2);

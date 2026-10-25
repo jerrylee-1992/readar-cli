@@ -62,7 +62,7 @@ export async function searchContents(client: Client, filters: SearchFilters): Pr
   const account = await client.accountID();
   const filter = createHash('sha256').update(JSON.stringify([client.url, account, filters.query, filters.type, filters.includeArchived, filters.mode])).digest('hex');
   if (cursor && cursor.filter !== filter) invalid('Cursor belongs to different filters, account or API.');
-  const params = new URLSearchParams({ q: filters.query, type: filters.type, include_archived: String(filters.includeArchived), mode: filters.mode, limit: String(filters.limit) });
+  const params = new URLSearchParams({ q: filters.query, type: filters.type, include_archived: String(filters.includeArchived), mode: filters.mode, limit: String(filters.limit), include_records: 'true' });
   if (cursor) params.set('cursor', cursor.token);
   const value = await client.request(`/v1/search?${params}`) as { items?: unknown; next_cursor?: unknown; has_more?: unknown; search_mode?: unknown; consistency?: unknown; indexing_status?: unknown; candidate_limit_reached?: unknown } | null;
   if (!value || !Array.isArray(value.items) || !value.items.every(searchItem) || !(value.next_cursor === null || typeof value.next_cursor === 'string' && value.next_cursor.length > 0) || typeof value.has_more !== 'boolean' || value.has_more !== (value.next_cursor !== null) || value.search_mode !== filters.mode || value.consistency !== 'eventual' || !['ready', 'partial'].includes(String(value.indexing_status)) || typeof value.candidate_limit_reached !== 'boolean') throw new CLIError('invalid_response', 'Invalid server content search response.', 1);
